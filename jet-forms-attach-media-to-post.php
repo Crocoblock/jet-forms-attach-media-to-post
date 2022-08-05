@@ -21,10 +21,22 @@ if ( ! defined( 'WPINC' ) ) {
 
 add_action( 'jet-engine/forms/booking/notification/insert_post', 'jet_forms_attach_media_to_post', 20, 2 );
 
-add_action( 'jet-form-builder/action/after-post-insert', 'jet_forms_attach_media_to_post_jfb', 20, 2 );
+$jfb_inserted_attachments = array();
+
+add_action( 'jet-form-builder/action/after-post-insert', 'jet_forms_attach_media_to_post_jfb', 20 );
+
+add_action( 'jet-form-builder/inserted-attachment', function ( $file, $uploader ) {
+	global $jfb_inserted_attachments;
+
+	/** @var \Jet_Form_Builder\Request\File_Uploader $uploader */
+	/** @var \Jet_Form_Builder\Classes\Resources\Uploaded_File $file */
+	$name = $uploader->get_settings()['name'] ?? '';
+
+	$jfb_inserted_attachments[ $name ] = $file->get_attachment_id();
+}, 10, 2 );
 
 function _jet_forms_attach_images( $request_source, $media_keys, $inserted_post_id ) {
-	$get_attachment_image_data_array = function( $img_data = null, $include = 'all' ) {
+	$get_attachment_image_data_array = function ( $img_data = null, $include = 'all' ) {
 		$result = false;
 
 		if ( empty( $img_data ) ) {
@@ -116,7 +128,7 @@ function _jet_forms_attach_images( $request_source, $media_keys, $inserted_post_
 		$attachment_ids = array_map( function ( $item ) use ( $get_attachment_image_data_array ) {
 			return call_user_func( $get_attachment_image_data_array, $item, 'id' );
 		}, $attachment_data );
-		
+
 		$attachment_ids = wp_list_pluck( $attachment_ids, 'id' );
 
 		foreach ( $attachment_ids as $attachment_id ) {
@@ -126,36 +138,22 @@ function _jet_forms_attach_images( $request_source, $media_keys, $inserted_post_
 			) );
 		}
 	}
-};
+}
 
-/**
- * @param $action
- * @param Action_Handler $handler
- */
-function jet_forms_attach_media_to_post_jfb( $action, $handler ) {
-
-	$inserted_id = $handler->get_inserted_post_id();
+function jet_forms_attach_media_to_post_jfb() {
+	global $jfb_inserted_attachments;
+	$inserted_id = jet_fb_action_handler()->get_inserted_post_id();
 
 	if ( empty( $inserted_id ) ) {
 		return;
 	}
-	$field_settings = wp_list_pluck( jet_form_builder()->form_handler->request_handler->_fields, 'attrs' );
-	$media_keys = array();
 
-	foreach ( $field_settings as $field_setting ) {
-		if ( isset( $field_setting['insert_attachment'] )
-		     && isset( $field_setting['name'] )
-		     && filter_var( $field_setting['insert_attachment'], FILTER_VALIDATE_BOOLEAN )
-		) {
-			$media_keys[] = $field_setting['name'];
-		}
+	foreach ( $jfb_inserted_attachments as $attachment_id ) {
+		wp_update_post( array(
+			'ID'          => $attachment_id,
+			'post_parent' => $inserted_id,
+		) );
 	}
-
-	if ( empty( $media_keys ) ) {
-		return;
-	}
-
-	call_user_func( '_jet_forms_attach_images', $handler->request_data, $media_keys, $inserted_id );
 }
 
 function jet_forms_attach_media_to_post( $notification, $manager ) {
