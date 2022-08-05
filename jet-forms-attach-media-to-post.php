@@ -3,7 +3,7 @@
  * Plugin Name: JetEngine Forms - attach media to post
  * Plugin URI:
  * Description: Allow to attach media to parent post on insert post. Also supports JetFormBuilder.
- * Version:     1.1.0
+ * Version:     1.1.1
  * Author:      Crocoblock
  * Author URI:  https://crocoblock.com/
  * Text Domain: jet-forms-attach-media-to-post
