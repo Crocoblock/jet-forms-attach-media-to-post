@@ -32,7 +32,11 @@ add_action( 'jet-form-builder/inserted-attachment', function ( $file, $uploader 
 	/** @var \Jet_Form_Builder\Classes\Resources\Uploaded_File $file */
 	$name = $uploader->get_settings()['name'] ?? '';
 
-	$jfb_inserted_attachments[ $name ] = $file->get_attachment_id();
+	if ( ! isset( $jfb_inserted_attachments[ $name ] ) ) {
+		$jfb_inserted_attachments[ $name ] = array();
+	}
+
+	$jfb_inserted_attachments[ $name ][] = $file->get_attachment_id();
 }, 10, 2 );
 
 function _jet_forms_attach_images( $request_source, $media_keys, $inserted_post_id ) {
@@ -148,11 +152,13 @@ function jet_forms_attach_media_to_post_jfb() {
 		return;
 	}
 
-	foreach ( $jfb_inserted_attachments as $attachment_id ) {
-		wp_update_post( array(
-			'ID'          => $attachment_id,
-			'post_parent' => $inserted_id,
-		) );
+	foreach ( $jfb_inserted_attachments as $attachment_ids ) {
+		foreach ( $attachment_ids as $id ) {
+			wp_update_post( array(
+				'ID'          => $id,
+				'post_parent' => $inserted_id,
+			) );
+		}
 	}
 }
 
