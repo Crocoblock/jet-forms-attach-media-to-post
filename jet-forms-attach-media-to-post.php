@@ -24,6 +24,7 @@ add_action( 'jet-engine/forms/booking/notification/insert_post', 'jet_forms_atta
 $jfb_inserted_attachments = array();
 
 add_action( 'jet-form-builder/action/after-post-insert', 'jet_forms_attach_media_to_post_jfb', 20 );
+add_action( 'jet-form-builder/action/after-post-update', 'jet_forms_attach_media_to_post_jfb', 20 );
 
 add_action( 'jet-form-builder/inserted-attachment', function ( $file, $uploader ) {
 	global $jfb_inserted_attachments;
