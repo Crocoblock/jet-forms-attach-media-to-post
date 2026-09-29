@@ -3,7 +3,7 @@
  * Plugin Name: JetEngine Forms - attach media to post
  * Plugin URI:
  * Description: Allow to attach media to parent post on insert post. Also supports JetFormBuilder.
- * Version:     1.1.2
+ * Version:     1.1.3
  * Author:      Crocoblock
  * Author URI:  https://crocoblock.com/
  * Text Domain: jet-forms-attach-media-to-post
@@ -25,6 +25,49 @@ $jfb_inserted_attachments = array();
 
 add_action( 'jet-form-builder/action/after-post-insert', 'jet_forms_attach_media_to_post_jfb', 20 );
 add_action( 'jet-form-builder/action/after-post-update', 'jet_forms_attach_media_to_post_jfb', 20 );
+add_action( 'jet-form-builder/before-do-action/save_record', 'jet_forms_preserve_media_to_post_jfb' );
+add_filter( 'jet-form-builder/request-handler/request', 'jet_forms_clear_submitted_media_to_post_jfb' );
+
+/**
+ * Discard client-supplied attachment IDs before parsing and validation events.
+ * Run after request providers; gateway record restoration does not use this filter.
+ */
+function jet_forms_clear_submitted_media_to_post_jfb( $request ) {
+	if ( array_key_exists( '_jfb_attach_media_to_post', $request ) ) {
+		$request['_jfb_attach_media_to_post'] = '';
+	}
+
+	return $request;
+}
+
+/**
+ * Form Record persists uploaded attachment IDs and restores them on deferred events.
+ * Older JFB versions without this hook retain the same-request behaviour.
+ */
+function jet_forms_preserve_media_to_post_jfb() {
+	global $jfb_inserted_attachments;
+
+	if ( ! function_exists( 'jet_fb_context' ) ) {
+		return;
+	}
+
+	// Always overwrite a submitted value, including submissions without uploads.
+	// Use a scalar: restored computed fields use JFB's default field parser.
+	jet_fb_context()->update_request(
+		wp_json_encode( $jfb_inserted_attachments ),
+		'_jfb_attach_media_to_post'
+	);
+}
+
+function jet_forms_restored_media_to_post_jfb() {
+	if ( ! function_exists( 'jet_fb_context' ) ) {
+		return array();
+	}
+
+	$saved = jet_fb_context()->get_value( '_jfb_attach_media_to_post' );
+	$saved = is_string( $saved ) ? json_decode( $saved, true ) : null;
+	return is_array( $saved ) ? $saved : array();
+}
 
 add_action( 'jet-form-builder/inserted-attachment', function ( $file, $uploader ) {
 	global $jfb_inserted_attachments;
@@ -147,14 +190,22 @@ function _jet_forms_attach_images( $request_source, $media_keys, $inserted_post_
 
 function jet_forms_attach_media_to_post_jfb() {
 	global $jfb_inserted_attachments;
+	// Preserve legacy behaviour: all uploads belong to the first post in this action flow.
 	$inserted_id = jet_fb_action_handler()->get_inserted_post_id();
 
 	if ( empty( $inserted_id ) ) {
 		return;
 	}
 
-	foreach ( $jfb_inserted_attachments as $attachment_ids ) {
-		foreach ( $attachment_ids as $id ) {
+	$attachments = $jfb_inserted_attachments ?: jet_forms_restored_media_to_post_jfb();
+	$attached    = array();
+	foreach ( $attachments as $attachment_ids ) {
+		foreach ( (array) $attachment_ids as $id ) {
+			$id = absint( $id );
+			if ( ! $id || isset( $attached[ $id ] ) || 'attachment' !== get_post_type( $id ) ) {
+				continue;
+			}
+			$attached[ $id ] = true;
 			wp_update_post( array(
 				'ID'          => $id,
 				'post_parent' => $inserted_id,
